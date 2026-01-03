@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Retro Snake Game</title>
+    <title>Pro Snake Real</title>
     <style>
         body {
             display: flex;
@@ -12,21 +12,33 @@
             justify-content: center;
             height: 100vh;
             margin: 0;
-            background-color: #2c3e50;
-            font-family: Arial, sans-serif;
+            background: radial-gradient(#2c3e50, #000);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: white;
-            touch-action: manipulation;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #game-info {
+            display: flex;
+            gap: 20px;
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
         }
 
         #game-container {
             position: relative;
-            border: 4px solid #ecf0f1;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            border: 5px solid #34495e;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(0,255,127,0.2);
         }
 
         canvas {
             display: block;
-            background-color: #000;
+            background-color: #1a1a1a;
+            border-radius: 5px;
         }
 
         #ui-layer {
@@ -39,30 +51,225 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 5px;
+            z-index: 10;
         }
 
         button {
-            padding: 15px 30px;
-            font-size: 20px;
-            background-color: #27ae60;
+            padding: 15px 40px;
+            font-size: 24px;
+            background: linear-gradient(#2ecc71, #27ae60);
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 50px;
             cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
         }
 
-        button:hover { background-color: #2ecc71; }
+        button:active { transform: scale(0.95); }
 
-        /* Joystick Controls */
-        #controls {
-            margin-top: 20px;
+        /* Large Joystick */
+        #joystick-container {
+            margin-top: 25px;
             display: grid;
-            grid-template-columns: repeat(3, 60px);
-            grid-template-rows: repeat(2, 60px);
-            gap: 10px;
+            grid-template-columns: repeat(3, 80px);
+            grid-template-rows: repeat(2, 80px);
+            gap: 15px;
         }
 
+        .joy-btn {
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .joy-btn:active { background: rgba(46, 204, 113, 0.4); }
+
+        #up { grid-column: 2; }
+        #left { grid-column: 1; }
+        #down { grid-column: 2; }
+        #right { grid-column: 3; }
+        
+        .level-up-text { color: #f1c40f; font-size: 1.5rem; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="game-info">
+        <span>Level: <span id="lvl-disp">1</span></span>
+        <span>Score: <span id="score-disp">0</span></span>
+    </div>
+
+    <div id="game-container">
+        <canvas id="snakeGame" width="360" height="360"></canvas>
+        
+        <div id="ui-layer">
+            <h1 id="status-text">REAL SNAKE</h1>
+            <p id="sub-text">Eat 10 to Level Up!</p>
+            <button id="start-btn">START</button>
+        </div>
+    </div>
+
+    <div id="joystick-container">
+        <div class="joy-btn" id="up">▲</div>
+        <div class="joy-btn" id="left">◀</div>
+        <div class="joy-btn" id="down">▼</div>
+        <div class="joy-btn" id="right">▶</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("snakeGame");
+        const ctx = canvas.getContext("2d");
+        const startBtn = document.getElementById("start-btn");
+        const uiLayer = document.getElementById("ui-layer");
+        const scoreDisp = document.getElementById("score-disp");
+        const lvlDisp = document.getElementById("lvl-disp");
+
+        const box = 20;
+        let snake, food, direction, gameInterval, score, level, speed;
+
+        function init() {
+            snake = [
+                { x: 5 * box, y: 10 * box },
+                { x: 4 * box, y: 10 * box },
+                { x: 3 * box, y: 10 * box }
+            ];
+            food = spawnFood();
+            direction = "RIGHT";
+            score = 0;
+            level = 1;
+            speed = 150; // Starting slow
+            
+            updateUI();
+            uiLayer.style.display = "none";
+            startGameLoop();
+        }
+
+        function spawnFood() {
+            return {
+                x: Math.floor(Math.random() * (canvas.width / box)) * box,
+                y: Math.floor(Math.random() * (canvas.height / box)) * box
+            };
+        }
+
+        function startGameLoop() {
+            if(gameInterval) clearInterval(gameInterval);
+            gameInterval = setInterval(draw, speed);
+        }
+
+        function updateUI() {
+            scoreDisp.innerText = score;
+            lvlDisp.innerText = level;
+        }
+
+        // Controls
+        const handleInput = (newDir) => {
+            if (newDir === "LEFT" && direction !== "RIGHT") direction = "LEFT";
+            if (newDir === "UP" && direction !== "DOWN") direction = "UP";
+            if (newDir === "RIGHT" && direction !== "LEFT") direction = "RIGHT";
+            if (newDir === "DOWN" && direction !== "UP") direction = "DOWN";
+        };
+
+        document.getElementById("up").onclick = () => handleInput("UP");
+        document.getElementById("down").onclick = () => handleInput("DOWN");
+        document.getElementById("left").onclick = () => handleInput("LEFT");
+        document.getElementById("right").onclick = () => handleInput("RIGHT");
+
+        document.addEventListener("keydown", (e) => {
+            if(e.key === "ArrowUp") handleInput("UP");
+            if(e.key === "ArrowDown") handleInput("DOWN");
+            if(e.key === "ArrowLeft") handleInput("LEFT");
+            if(e.key === "ArrowRight") handleInput("RIGHT");
+        });
+
+        function draw() {
+            // Background
+            ctx.fillStyle = "#1a1a1a";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Snake
+            snake.forEach((part, index) => {
+                const isHead = index === 0;
+                ctx.fillStyle = isHead ? "#2ecc71" : "#27ae60";
+                
+                // Draw rounded body
+                ctx.beginPath();
+                ctx.roundRect(part.x + 1, part.y + 1, box - 2, box - 2, isHead ? 8 : 4);
+                ctx.fill();
+
+                // Eyes for the head
+                if (isHead) {
+                    ctx.fillStyle = "white";
+                    ctx.beginPath();
+                    ctx.arc(part.x + 6, part.y + 6, 3, 0, Math.PI * 2);
+                    ctx.arc(part.x + 14, part.y + 6, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            });
+
+            // Draw Apple (Food)
+            ctx.fillStyle = "#e74c3c";
+            ctx.beginPath();
+            ctx.arc(food.x + box/2, food.y + box/2, box/2 - 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Movement logic
+            let headX = snake[0].x;
+            let headY = snake[0].y;
+
+            if (direction === "LEFT") headX -= box;
+            if (direction === "UP") headY -= box;
+            if (direction === "RIGHT") headX += box;
+            if (direction === "DOWN") headY += box;
+
+            // Check Food
+            if (headX === food.x && headY === food.y) {
+                score++;
+                food = spawnFood();
+                
+                // Level Up Logic
+                if (score % 10 === 0) {
+                    level++;
+                    speed = Math.max(50, speed - 25); // Faster
+                    startGameLoop();
+                }
+                updateUI();
+            } else {
+                snake.pop();
+            }
+
+            const newHead = { x: headX, y: headY };
+
+            // Death Conditions
+            if (headX < 0 || headX >= canvas.width || headY < 0 || headY >= canvas.height || collision(newHead, snake)) {
+                clearInterval(gameInterval);
+                document.getElementById("status-text").innerText = "SNAKE DIED!";
+                document.getElementById("sub-text").innerHTML = `<span class="level-up-text">Reached Level ${level}</span>`;
+                startBtn.innerText = "TRY AGAIN";
+                uiLayer.style.display = "flex";
+            }
+
+            snake.unshift(newHead);
+        }
+
+        function collision(head, array) {
+            return array.some(part => part.x === head.x && part.y === head.y);
+        }
+
+        startBtn.addEventListener("click", init);
+    </script>
+</body>
+</html>
         .joy-btn {
             width: 60px;
             height: 60px;
